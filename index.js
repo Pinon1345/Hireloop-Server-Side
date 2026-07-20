@@ -46,7 +46,11 @@ async function run() {
 
         app.post('/api/jobs', async (req, res) => {
             const job = req.body
-            const result = await jobCollection.insertOne(job)
+            const newJob = {
+                ...job,
+                createdAt: new Date()
+            }
+            const result = await jobCollection.insertOne(newJob)
             res.send(result);
         })
 
@@ -72,12 +76,48 @@ async function run() {
 
         // Company related API
 
+        app.get('/api/companies', async (req, res) => {
+            const cursor = companyCollection.find().skip(18)
+            const result = await cursor.toArray()
+            res.send(result);
+        })
+
         // Create Company
 
         app.post('/api/companies', async (req, res) => {
-            const company = req.body
-            const result = await companyCollection.insertOne(company)
-            res.send(result);
+            try {
+                // Remove _id from request body
+                const { _id, ...companyData } = req.body;
+
+                const newCompany = {
+                    ...companyData,
+                    updatedAt: new Date()
+                };
+
+                const result = await companyCollection.updateOne(
+                    { recruiterId: newCompany.recruiterId },
+                    { $set: newCompany },
+                    { upsert: true }
+                );
+
+                res.send(result);
+
+            } catch (error) {
+                console.error(error);
+                res.status(500).send({ message: error.message });
+            }
+        });
+
+
+        // Get API for Company
+
+        app.get('/api/my/companies', async (req, res) => {
+            const query = {};
+            if (req.query.recruiterId) {
+                query.recruiterId = req.query.recruiterId
+            }
+            const result = await companyCollection.findOne(query)
+            res.send(result || {});
         })
 
 
