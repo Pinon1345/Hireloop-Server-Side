@@ -134,11 +134,48 @@ async function run() {
 
         // Company related API
 
+        // app.get('/api/companies', async (req, res) => {
+        //     const cursor = companyCollection.find().skip(18)
+        //     const result = await cursor.toArray()
+        //     res.send(result);
+        // })
+
+
+        // Inefficient way to join/aggregate collection
+
         app.get('/api/companies', async (req, res) => {
             const cursor = companyCollection.find().skip(18)
+            const companies = await cursor.toArray()
+
+            for (const company of companies) {
+                const filter = {
+                    companyId: company._id.toString()
+                }
+                const jobCount = await jobCollection.countDocuments(filter)
+                company.jobCount = jobCount
+            }
+
+            res.send(companies);
+        })
+
+
+        // By using Aggregation Pipeline
+
+
+        app.get('/api/companies2', async (req, res) => {
+            const pipeline = [
+                {
+                    $skip: 10
+                },
+                {
+                    $limit: 4
+                }
+            ]
+            const cursor = companyCollection.aggregate(pipeline)
             const result = await cursor.toArray()
             res.send(result);
         })
+
 
         // Create Company
 
@@ -177,6 +214,23 @@ async function run() {
             const result = await companyCollection.findOne(query)
             res.send(result || {});
         })
+
+
+        // Patch API for Update Company Status
+
+        app.patch('/api/companies/:id', async (req, res) => {
+            const id = req.params.id
+            const updatedCompany = req.body
+            const filter = { _id: new ObjectId(id) }
+            const updatedDoc = {
+                $set: {
+                    status: updatedCompany.status
+                }
+            }
+            const result = await companyCollection.updateOne(filter, updatedDoc);
+            res.send(result);
+        })
+
 
         // AIP for Plans
 
