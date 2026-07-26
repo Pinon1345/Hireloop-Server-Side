@@ -9,6 +9,8 @@ app.use(express.json())
 
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 
+
+
 app.get('/', (req, res) => {
     res.send('Hello World!')
 })
@@ -40,13 +42,84 @@ async function run() {
         const applicationsCollection = database.collection("applications");
         const planCollection = database.collection("plans");
         const subscriptionCollection = database.collection("subscriptions");
+        const sessionCollection = database.collection("session");
 
+
+        // Verification Related
+
+        // Using Middleware before API calling
+
+        const verifyToken = async (req, res, next) => {
+
+            const authHeader = req.headers?.authorization;
+            if (!authHeader) {
+                return res.status(401).send({ message: "Unauthorized Access" })
+            }
+
+            const token = authHeader.split(' ')[1]
+
+            if (!token) {
+                return res.status(401).send({ message: "Unauthorized Access" })
+            }
+
+            const query = { token: token }
+            const session = await sessionCollection.findOne(query)
+
+            if (!session) {
+                return res.status(401).send({ message: "Unauthorized Access" })
+            }
+
+            const userId = session.userId;
+
+            const userQuery = {
+                _id: userId
+            }
+
+            const user = await userCollection.findOne(userQuery)
+
+            if (!user) {
+                return res.status(401).send({ message: "Unauthorized Access" })
+            }
+
+            // set data in the request object
+            req.user = user
+
+            next()
+        }
+
+        // must be used after verifyToken middleware
+
+        const verifySeeker = async (req, res, next) => {
+            if (req.user?.role !== 'seeker') {
+                return res.status(403).send({ message: "Forbidden Access" })
+            }
+            next()
+        }
+
+        // must be used after verifyToken middleware
+
+        const verifyRecruiter = async (req, res, next) => {
+            if (req.user?.role !== 'recruiter') {
+                return res.status(403).send({ message: "Forbidden Access" })
+            }
+            next()
+        }
+
+        // must be used after verifyToken middleware
+
+        const verifyAdmin = async (req, res, next) => {
+            if (req.user?.role !== 'admin') {
+                return res.status(403).send({ message: "Forbidden Access" })
+            }
+            next()
+        }
 
 
         // API Start
 
 
         // User get related API
+
 
         app.get("/api/users", async (req, res) => {
             const email = req.query.email;
@@ -58,6 +131,9 @@ async function run() {
             res.send(user || {});
         });
 
+
+
+        // Jobs related APIs
 
         // Post API for new job
 
@@ -105,10 +181,19 @@ async function run() {
 
         // Get API for job application
 
-        app.get('/api/applications', async (req, res) => {
+        app.get('/api/applications', verifyToken, verifySeeker, async (req, res) => {
             const query = {}
             if (req.query.applicantId) {
                 query.applicantId = req.query.applicantId;
+
+                // Check whether asking for user information of someone else
+
+                console.log(req.user, req.query.applicantId);
+
+                if (req.user._id.toString() !== req.query.applicantId) {
+                    return res.status(403).send({ message: "Forbidden Access" })
+                }
+
             }
             if (req.query.jobId) {
                 query.jobId = req.query.jobId;
@@ -143,7 +228,7 @@ async function run() {
 
         // Inefficient way to join/aggregate collection
 
-        app.get('/api/companies', async (req, res) => {
+        app.get('/api/companies', verifyToken, async (req, res) => {
             const cursor = companyCollection.find().skip(18)
             const companies = await cursor.toArray()
 
@@ -218,7 +303,7 @@ async function run() {
 
         // Patch API for Update Company Status
 
-        app.patch('/api/companies/:id', async (req, res) => {
+        app.patch('/api/companies/:id', verifyToken, verifyAdmin, async (req, res) => {
             const id = req.params.id
             const updatedCompany = req.body
             const filter = { _id: new ObjectId(id) }
