@@ -162,20 +162,67 @@ async function run() {
         // Special Get API from create new job
 
         app.get('/api/jobs', async (req, res) => {
-            const query = {};
-            if (req.query.companyId) {
-                query.companyId = req.query.companyId;
+            try {
+                console.log("server side q", req.query);
+                const { search, category, type, remote, companyId, status, page = 1, limit = 10 } = req.query;
+
+                const query = {};
+
+                // 1. Search Filter
+                if (search) {
+                    query.$or = [
+                        { jobTitle: { $regex: search, $options: 'i' } },
+                        { companyName: { $regex: search, $options: 'i' } }
+                    ];
+                }
+
+                // 2. Category Filter
+                if (category && category !== 'All') {
+                    query.jobCategory = { $regex: new RegExp(`^${category}$`, 'i') };
+                }
+
+                // 3. Type Filter
+                if (type && type !== 'All') {
+                    query.jobType = { $regex: new RegExp(`^${type}$`, 'i') };
+                }
+
+                // 4. Remote Filter
+                if (remote && remote !== 'All') {
+                    if (remote === 'Remote') {
+                        query.isRemote = true;
+                    } else if (remote === 'On-site') {
+                        query.isRemote = false;
+                    }
+                }
+
+                // 5. Company/Status Filters
+                if (companyId) query.companyId = companyId;
+                if (status) query.status = status;
+
+                // Pagination setup
+                const pageNum = Math.max(1, parseInt(page, 10) || 1);
+                const limitNum = Math.max(1, parseInt(limit, 10) || 10);
+                const skip = (pageNum - 1) * limitNum;
+
+                const total = await jobCollection.countDocuments(query);
+                const jobs = await jobCollection
+                    .find(query)
+                    .skip(skip)
+                    .limit(limitNum)
+                    .toArray();
+
+                res.send({
+                    jobs,
+                    total,
+                    page: pageNum,
+                    limit: limitNum,
+                    totalPages: Math.ceil(total / limitNum) || 1
+                });
+            } catch (error) {
+                console.error("Error fetching jobs:", error);
+                res.status(500).send({ error: "Failed to fetch jobs" });
             }
-            if (req.query.status) {
-                query.status = req.query.status;
-            }
-
-            const cursor = jobCollection.find(query)
-            const result = await cursor.toArray()
-            res.send(result);
-
-
-        })
+        });
 
         // Application related API
 
