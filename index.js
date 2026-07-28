@@ -35,6 +35,9 @@ async function run() {
         await client.connect();
 
 
+        // All Collections
+
+
         const database = client.db("hireloop_db");
         const userCollection = database.collection("user");
         const jobCollection = database.collection("jobs");
@@ -313,7 +316,9 @@ async function run() {
 
         app.post('/api/companies', async (req, res) => {
             try {
+
                 // Remove _id from request body
+
                 const { _id, ...companyData } = req.body;
 
                 const newCompany = {
